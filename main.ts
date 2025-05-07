@@ -1,59 +1,82 @@
-export function main() {
-	randomLog({
-		interval: getEnv("LOG_INTERVAL", 500),
-		intervalRandomOffset: getEnv("LOG_INTERVAL_RANDOM_OFFSET", 5000),
-		descriptions: [
-			{ type: "log", message: () => "Hello World" },
-			{ type: "error", message: () => "Something went wrong" },
-			{ type: "warn", message: () => "Please review this log" },
-		]
-	})
-}
+import { Hono } from "hono";
+
+const r = () =>
+  randomLog({
+    descriptions: [
+      { type: "log", message: () => "Hello World" },
+      { type: "error", message: () => "Something went wrong" },
+      { type: "warn", message: () => "Please review this log" },
+    ],
+  });
+
+const app = new Hono();
+const PORT = Number(Deno.env.get("PORT")) || 80;
+
+addEventListener("fetch", () => {
+  console.log(`APP Running on ${PORT}`);
+});
+
+app.get("/", (c) => {
+  const result = r();
+  return c.json({
+    message: "Log enabled and successfully running",
+    log: result,
+  });
+});
+
+app.get("/logs/:count", async (c) => {
+  const count = Number(c.req.param("count"));
+  const delay = Number(c.req.query("delay")) || 0;
+
+  const results: LogPayload[] = [];
+  for (let i = 0; i < count; i++) {
+    results.push(r());
+    if (delay && delay > 0) await new Promise((res) => setTimeout(res, delay));
+  }
+  return c.json({
+    message: "Log enabled and successfully running",
+    results,
+  });
+});
+
+Deno.serve({ port: PORT }, app.fetch);
 
 export type LogType = "log" | "error" | "warn";
+export interface LogPayload {
+  type: LogType;
+  msg: string;
+  now: Date;
+}
 
 export interface LogDescription {
-	type: LogType;
-	message: () => string;
+  type: LogType;
+  message: () => string;
 }
 
 export interface RandomLogOpts {
-	interval: number;
-	intervalRandomOffset: number;
-	descriptions: LogDescription[];
-}
-
-function getEnv<T>(envName: string, defaultValue: T): number | typeof defaultValue {
-	return Deno.env.has(envName) ? parseInt(Deno.env.get(envName)!) : defaultValue
+  descriptions: LogDescription[];
 }
 
 export function randomLog(opts: RandomLogOpts) {
-	const { interval, intervalRandomOffset, descriptions } = opts;
-	const value = interval + Math.random() * intervalRandomOffset;
+  const { descriptions } = opts;
 
-	setInterval(() => {
-		const pickLog =
-			descriptions[Math.floor(Math.random() * descriptions.length)];
-		const { message, type } = pickLog;
-		const msg = `[${type.toUpperCase()}] ${message()} -> ${
-			new Date().toUTCString()
-		}`;
+  const pickLog = descriptions[Math.floor(Math.random() * descriptions.length)];
+  const { message, type } = pickLog;
+  const msg = `[${type.toUpperCase()}] ${message()} -> ${
+    new Date().toUTCString()
+  }`;
 
-		switch (type) {
-			case "error":
-				console.error(msg);
-				break;
-			case "log":
-				console.log(msg);
-				break;
-			case "warn":
-				console.warn(msg);
-				break;
-		}
-	}, value);
-}
+  switch (type) {
+    case "error":
+      console.error(msg);
+      break;
+    case "log":
+      console.log(msg);
+      break;
+    case "warn":
+      console.warn(msg);
+      break;
+  }
 
-// Learn more at https://docs.deno.com/runtime/manual/examples/module_metadata#concepts
-if (import.meta.main) {
-	main();
+  return { type, msg, now: new Date() } as LogPayload;
 }
