@@ -9,4 +9,4 @@ ENV LOG_INTERVAL_RANDOM_OFFSET=5000
 COPY . .
 RUN deno cache main.ts
 
-CMD ["run", "--allow-env", "main.ts"]
+CMD ["run", "--allow-net", "--allow-env", "main.ts"]
